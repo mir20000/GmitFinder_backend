@@ -31,6 +31,9 @@ mongoose.connect(mongoDB, { useNewUrlParser: true, useUnifiedTopology: true });
 var db = mongoose.connection;
 db.on("error", console.error.bind(console, "MongoDB connection error:"));
 
+app.get("/", (req, res) => {
+  res.send("its working");
+});
 //search with any keyword(using reguler expretion)
 app.post("/search", myBodyParser, (req, res) => {
   var myregex = new RegExp(req.body.name, "i");
