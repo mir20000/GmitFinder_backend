@@ -15,11 +15,11 @@ var key = "MIR_amar_name";
 var algo = "aes256";
 var cors = require("cors");
 
-const dbsql = mysql.createConnection({
-  user: "roo",
-  host: "localhost",
-  password: "",
-  database: "gmit_react",
+const dbsql = mysql.createPool({
+  user: "sql6440972",
+  host: "sql6.freesqldatabase.com",
+  password: "khfC1RjxDW",
+  database: "sql6440972",
 });
 
 app.use(cors());
@@ -50,8 +50,7 @@ app.post("/profiledata", myBodyParser, (req, res) => {
     (err, result) => {
       if (err) {
         res.send({ err: err });
-      }
-      if (result.length > 0) {
+      } else {
         res.send(result);
       }
     }
