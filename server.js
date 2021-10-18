@@ -14,12 +14,15 @@ var myCrypto = require("crypto");
 var key = "MIR_amar_name";
 var algo = "aes256";
 var cors = require("cors");
+const LoginModel = require("./models/LoginModel");
+const ContactModel = require("./models/ContactModel");
+const HRWishlistModel = require("./models/HRWishlistModel");
 
 const dbsql = mysql.createPool({
-  user: "sql6440972",
-  host: "sql6.freesqldatabase.com",
-  password: "khfC1RjxDW",
-  database: "sql6440972",
+  user: "root",
+  host: "localhost",
+  password: "",
+  database: "gmit_react",
 });
 
 app.use(cors());
@@ -32,40 +35,59 @@ var db = mongoose.connection;
 db.on("error", console.error.bind(console, "MongoDB connection error:"));
 
 app.get("/", (req, res) => {
-  res.send("its working");
+  res.send("GMITFINDER API");
 });
+
+/////inser all login data
+
 //search with any keyword(using reguler expretion)
 app.post("/search", myBodyParser, (req, res) => {
   var myregex = new RegExp(req.body.name, "i");
-  SkillModel.find({ skill: myregex }).then((details) => {
+  SkillModel.find({ skill: myregex, flag: 1 }).then((details) => {
+    res.status(200).json(details);
+  });
+});
+
+app.post("/unique_dept", myBodyParser, (req, res) => {
+  LoginModel.distinct("dept").then((details) => {
+    res.status(200).json(details);
+  });
+});
+
+app.post("/unique_session", myBodyParser, (req, res) => {
+  LoginModel.distinct("session").then((details) => {
     res.status(200).json(details);
   });
 });
 
 app.post("/profiledata", myBodyParser, (req, res) => {
   const id = req.body.id;
-  dbsql.query(
-    "SELECT id ,name,email,phone FROM login_cred WHERE id=?",
-    [id],
-    (err, result) => {
-      if (err) {
-        res.send({ err: err });
-      } else {
-        res.send(result);
-      }
-    }
-  );
+  LoginModel.find({ _id: id })
+    .select({
+      _id: 1,
+      name: 1,
+      email: 1,
+      phone: 1,
+      dept: 1,
+      session: 1,
+      profile_pic: 1,
+    })
+    .then((details) => {
+      res.send(details);
+    });
 });
 
 app.post("/allcvdata", myBodyParser, (req, res) => {
   const id = req.body.id;
-  dbsql.query("SELECT * FROM login_cred WHERE id=?", [id], (err, result) => {
-    if (err) {
-      res.send({ err: err });
-    }
-    if (result.length > 0) {
-      res.send(result);
-    }
+  LoginModel.find({ _id: id }).then((details) => {
+    res.send(details);
+  });
+});
+
+app.post("/getcvdata", myBodyParser, (req, res) => {
+  const id = req.body.id;
+  LoginModel.find({ _id: id }).then((details) => {
+    res.status(200).json(details);
   });
 });
 
@@ -74,51 +96,48 @@ app.post("/login", myBodyParser, (req, res) => {
   const email = req.body.email;
   var deCipher = myCrypto.createDecipher(algo, key);
 
-  dbsql.query(
-    "SELECT * FROM login_cred WHERE email =?",
-    [email],
-    (err, result) => {
-      if (err) {
-        res.send({ err: err });
-      }
+  LoginModel.find({ email: email }).then((result) => {
+    if (result.length > 0) {
+      var decryPassword =
+        deCipher.update(result[0].password, "hex", "utf8") +
+        deCipher.final("utf8");
+      if (decryPassword === password) {
+        const { _id, name, user_type } = result[0];
+        var user = {
+          id: _id,
+          username: name,
+          user_type: user_type,
+        };
 
-      if (result.length > 0) {
-        var decryPassword =
-          deCipher.update(result[0].password, "hex", "utf8") +
-          deCipher.final("utf8");
+        const tokenCode = jwt.sign(user, "secretKey");
+        res.send({ access: tokenCode });
 
-        if (decryPassword === password) {
-          const { id, name, user_type } = result[0];
-          var user = {
-            id: id,
-            username: name,
-            user_type: user_type,
-          };
-
-          const tokenCode = jwt.sign(user, "secretKey");
-          res.send({ access: tokenCode });
-
-          // res.send(result);
-        } else {
-          res.send({ message: "Password is not matching" });
-        }
+        // res.send(result);
       } else {
-        res.send({ message: "Email not exist" });
+        res.send({ message: "Password is not matching" });
       }
+    } else {
+      res.send({ message: "Email not exist" });
     }
-  );
+  });
 });
 
 app.post("/myprofiledata", myBodyParser, (req, res) => {
   const id = req.body.id;
-  dbsql.query("SELECT * FROM login_cred WHERE id=?", [id], (err, result) => {
-    if (err) {
-      res.send(err);
-    }
-    if (result.length > 0) {
-      res.send(result[0]);
-    }
+
+  LoginModel.find({ _id: id }).then((details) => {
+    res.send(details);
   });
+});
+
+app.post("/getnamedata", myBodyParser, (req, res) => {
+  const id = req.body.id;
+
+  LoginModel.find({ _id: id })
+    .select({ name: 1 })
+    .then((details) => {
+      res.send(details);
+    });
 });
 
 app.post("/signup", myBodyParser, (req, res) => {
@@ -135,35 +154,65 @@ app.post("/signup", myBodyParser, (req, res) => {
   var encPassword =
     myCipher.update(password, "utf8", "hex") + myCipher.final("hex");
 
-  dbsql.query(
-    "SELECT * FROM login_cred WHERE email =?",
-    [email],
-    (err, result) => {
-      if (err) {
-        res.send({ err: err });
+  LoginModel.find({ email: email }).then((result) => {
+    if (result.length !== 0) {
+      res.send({ message: "Email Already Exist" });
+    } else {
+      if (password === confirm_password) {
+        LoginModel.insertMany({
+          name: name,
+          user_type: user_type,
+          email: email,
+          phone: phone,
+          password: encPassword,
+          gender: gender,
+          date_of_birth: dob,
+        }).then((details) => {
+          res.send(details);
+        });
       } else {
-        if (result.length != 0) {
-          res.send({ message: "Email Already Exist" });
-        } else {
-          if (password === confirm_password) {
-            dbsql.query(
-              "INSERT INTO login_cred (name, user_type, email, phone, password, gender, date_of_birth) VALUES (?,?,?,?,?,?,?)",
-              [name, user_type, email, phone, encPassword, gender, dob],
-              (err, result) => {
-                if (err) {
-                  res.send({ err: err });
-                } else {
-                  res.send({ success: "You Have Successfully SignUp" });
-                }
-              }
-            );
-          } else {
-            res.send({ message: "Please Enter Same in Both Password Field" });
-          }
-        }
+        res.send({ message: "Please Enter Same in Both Password Field" });
       }
     }
-  );
+  });
+});
+
+app.post("/change_password", myBodyParser, (req, res) => {
+  const old_password = req.body.old_password;
+  const password = req.body.password;
+  const confirm_password = req.body.confirm_password;
+  const id = req.body.id;
+  var deCipher = myCrypto.createDecipher(algo, key);
+
+  LoginModel.find({ _id: id }).then((result) => {
+    if (result.length > 0) {
+      var decryPassword =
+        deCipher.update(result[0].password, "hex", "utf8") +
+        deCipher.final("utf8");
+      if (decryPassword === old_password) {
+        if (password === confirm_password) {
+          var myCipher = myCrypto.createCipher(algo, key);
+          var encPassword =
+            myCipher.update(password, "utf8", "hex") + myCipher.final("hex");
+
+          LoginModel.updateOne(
+            { _id: id },
+            { $set: { password: encPassword } }
+          ).then((data) => {
+            res.send({ message: "password_changed", details: data });
+          });
+        } else {
+          res.send({ message: "Please Enter Same in Both Password Field" });
+        }
+
+        // res.send(result);
+      } else {
+        res.send({ message: "Password is not matching" });
+      }
+    } else {
+      res.send({ message: "id not found" });
+    }
+  });
 });
 
 app.post("/getallskill", myBodyParser, (req, res) => {
@@ -186,6 +235,30 @@ app.post("/getallachievement", myBodyParser, (req, res) => {
 
 app.post("/getallproject", myBodyParser, (req, res) => {
   ProjectModel.find().then((details) => {
+    res.status(200).json(details);
+  });
+});
+
+app.post("/getflagskill", myBodyParser, (req, res) => {
+  SkillModel.find({ flag: req.body.flag }).then((details) => {
+    res.status(200).json(details);
+  });
+});
+
+app.post("/getflagacademic", myBodyParser, (req, res) => {
+  AcademicModel.find({ flag: req.body.flag }).then((details) => {
+    res.status(200).json(details);
+  });
+});
+
+app.post("/getflagachievement", myBodyParser, (req, res) => {
+  AchievementModel.find({ flag: req.body.flag }).then((details) => {
+    res.status(200).json(details);
+  });
+});
+
+app.post("/getflagproject", myBodyParser, (req, res) => {
+  ProjectModel.find({ flag: req.body.flag }).then((details) => {
     res.status(200).json(details);
   });
 });
@@ -229,6 +302,7 @@ app.post("/setflagproject", myBodyParser, (req, res) => {
     }
   );
 });
+
 app.post("/getskill", myBodyParser, (req, res) => {
   const user_id = req.body.user_id;
   SkillModel.find({ user_id: user_id, flag: true }).then((details) => {
@@ -268,28 +342,51 @@ app.post("/insertyourinfo", myBodyParser, (req, res) => {
   const address = req.body.address;
   const github = req.body.github;
   const linkedin = req.body.linkedin;
+  const session = req.body.session;
+  const dept = req.body.dept;
 
-  dbsql.query(
-    "UPDATE login_cred SET name=?,phone=? ,email=? ,gender=? ,date_of_birth=? ,github=? ,linkedin=? ,father_name=? ,address=? wHERE id=?",
-    [
-      name,
-      phone,
-      email,
-      gender,
-      dob,
-      github,
-      linkedin,
-      father_name,
-      address,
-      id,
-    ],
-    (err, result) => {
-      if (err) {
-        res.status(200).json(err);
-      }
-      res.status(200).json("changed");
+  LoginModel.updateOne(
+    { _id: id },
+    {
+      $set: {
+        name: name,
+        phone: phone,
+        email: email,
+        gender: gender,
+        date_of_birth: dob,
+        github: github,
+        linkedin: linkedin,
+        father_name: father_name,
+        address: address,
+        dept: dept,
+        session: session,
+      },
     }
-  );
+  ).then((details) => {
+    res.status(200).json(details);
+  });
+
+  // dbsql.query(
+  //   "UPDATE login_cred SET name=?,phone=? ,email=? ,gender=? ,date_of_birth=? ,github=? ,linkedin=? ,father_name=? ,address=? wHERE id=?",
+  //   [
+  //     name,
+  //     phone,
+  //     email,
+  //     gender,
+  //     dob,
+  //     github,
+  //     linkedin,
+  //     father_name,
+  //     address,
+  //     id,
+  //   ],
+  //   (err, result) => {
+  //     if (err) {
+  //       res.status(200).json(err);
+  //     }
+  //     res.status(200).json("changed");
+  //   }
+  // );
 });
 
 app.post("/insertskill", myBodyParser, (req, res) => {
@@ -395,6 +492,76 @@ app.post("/passworddecry", myBodyParser, (req, res) => {
     var decryPass =
       deCipher.update(data.password, "hex", "utf8") + deCipher.final("utf8");
     res.json(decryPass);
+  });
+});
+
+app.post("/update_profile_pic", myBodyParser, (req, res) => {
+  LoginModel.updateOne(
+    { _id: req.body.id },
+    {
+      $set: {
+        profile_pic: req.body.profile_pic,
+      },
+    }
+  )
+    .then((result) => {
+      res.status(200).json({ message: "update" });
+    })
+    .catch((err) => console.log(err));
+});
+
+app.post("/insertcontact", myBodyParser, (req, res) => {
+  ContactModel.insertMany({
+    name: req.body.name,
+    email: req.body.email,
+    phone: req.body.phone,
+    message: req.body.message,
+  }).then((data) => {
+    res.send({ message: "inserted", info: data });
+  });
+});
+
+app.post("/get_contact", myBodyParser, (req, res) => {
+  ContactModel.find().then((result) => {
+    res.send(result.reverse());
+  });
+});
+
+app.post("/hr_wishlist_add", myBodyParser, (req, res) => {
+  HRWishlistModel.insertMany({
+    hr_id: req.body.hr_id,
+    student_id: req.body.student_id,
+  }).then((result) => {
+    res.send({ message: "inserted" });
+  });
+});
+
+app.post("/hr_wishlist_remove", myBodyParser, (req, res) => {
+  HRWishlistModel.remove({
+    hr_id: req.body.hr_id,
+    student_id: req.body.student_id,
+  }).then((result) => {
+    res.send({ message: "removed" });
+  });
+});
+app.post("/hr_wishlist_data", myBodyParser, (req, res) => {
+  HRWishlistModel.find({
+    hr_id: req.body.hr_id,
+  }).then((result) => {
+    res.send(result);
+  });
+});
+
+app.post("/hr_wishlist_exist", myBodyParser, (req, res) => {
+  HRWishlistModel.find({
+    hr_id: req.body.hr_id,
+    student_id: req.body.student_id,
+  }).then((result) => {
+    if (result.length > 0) {
+      res.send({ exist: true });
+    } else {
+      res.send({ exist: false });
+    }
   });
 });
 
