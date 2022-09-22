@@ -28,7 +28,7 @@ const dbsql = mysql.createPool({
 app.use(cors());
 
 const mongoDB =
-  "mongodb+srv://mir:mir12345@cluster0.xpmh5.mongodb.net/gmitfinder";
+  "mongodb+srv://mir2000:mir12345@cluster0.ulr44.mongodb.net/gmitfinder";
 mongoose.connect(mongoDB, { useNewUrlParser: true, useUnifiedTopology: true });
 
 var db = mongoose.connection;
